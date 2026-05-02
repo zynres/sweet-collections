@@ -15,7 +15,7 @@ public unsafe struct UnsafeArray<T> : IUnsafeMap<T>, IDisposable where T : unman
         Capacity = capasity;
         Data = (T*)Marshal.AllocHGlobal(sizeof(T) * capasity);
 
-        //new Span<T>(Data, capasity).Clear();
+        new Span<T>(Data, capasity).Clear();
     }
 
     public void Set(int index, T value)
@@ -36,15 +36,20 @@ public unsafe struct UnsafeArray<T> : IUnsafeMap<T>, IDisposable where T : unman
 
     public readonly T* this[int index] => &Data[index];
 
-    public readonly void CopyTo(IUnsafeMap<T> map)
+    public readonly void CopyTo(UnsafeList<T>* map)
     {
-        if (Data == null)
+        if (Data == null || map->Data == null)
             return;
 
+        if (map->Capacity < Length)
+            throw new Exception("Overflow");
+            
         Buffer.MemoryCopy(
-            Data, map.Data,
-            map.Capacity * sizeof(T),
-            map.Length * sizeof(T));
+            Data, map->Data,
+            map->Capacity * sizeof(T),
+            Length * sizeof(T));
+
+        map->Length = Length;
     }
 
     public void Dispose()
