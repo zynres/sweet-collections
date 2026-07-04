@@ -102,4 +102,5 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         }
     }
     
+    public readonly ref T this[uint index] => ref Get(index);
 }
