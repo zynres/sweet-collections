@@ -64,4 +64,20 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
 
         *bucket = index;
     }
+
+    public readonly ref T Get(uint index)
+    {
+        if (index >= Lenght)
+            throw new IndexOutOfRangeException();
+
+        return ref Slot[index].Value;
+    }
+
+    public ref T Emplace(uint index)
+    {
+        if (index < Capacity && index >= Lenght)
+            Lenght = index + 1;
+
+        return ref Slot[index].Value;
+    }
 }
