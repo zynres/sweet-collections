@@ -26,4 +26,22 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         NativeMemory.Clear(Slot, (nuint)sizeof(Slot<T>) * capacity);
         NativeMemory.Clear(Bucket, sizeof(int) * bucketCapacity);
     }
+
+    public void Add(in T value)
+    {
+        if (Lenght >= Capacity)
+            Resize(Capacity * 2);
+
+        int hash = value.GetHashCode();
+        uint bucket_index = (uint)hash % bucketCapacity;
+        uint?* bucket = &Bucket[bucket_index];
+
+        Slot<T>* slot = &Slot[Lenght];
+
+        slot->Value = value;
+        slot->Hash = hash;
+        slot->Next = *bucket;
+
+        *bucket = Lenght;
+    }
 }
