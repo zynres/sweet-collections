@@ -4,7 +4,7 @@ namespace Sweet.Collections.Unsafe.HashSet;
 
 public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
 {
-    public uint?* Bucket;
+    public uint* Bucket;
     public Slot<T>* Slot;
 
     private uint bucketCapacity;
@@ -20,24 +20,20 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         Capacity = capacity;
         bucketCapacity = Math.Max(1u, capacity / division);
 
-        Slot = (Slot<T>*)NativeMemory.Alloc((nuint)(sizeof(Slot<T>) * capacity));
-        Bucket = (uint?*)NativeMemory.Alloc((nuint)sizeof(uint?) * bucketCapacity);
-
-        NativeMemory.Clear(Slot, (nuint)sizeof(Slot<T>) * capacity);
-        NativeMemory.Clear(Bucket, sizeof(uint) * bucketCapacity);
+        Init(ref Slot, capacity, ref Bucket, bucketCapacity);
     }
 
     public void Add(in T value)
     {
         if (Length >= Capacity)
             Resize(Capacity * 2);
-            
+
         if (Constaint(in value))
             return;
 
         int hash = value.GetHashCode();
         uint bucket_index = (uint)hash % bucketCapacity;
-        uint?* bucket = &Bucket[bucket_index];
+        uint* bucket = &Bucket[bucket_index];
 
         Slot<T>* slot = &Slot[Length];
 
@@ -57,11 +53,11 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         Slot<T>* slot = &Slot[index];
 
         uint bucket_index = (uint)slot->Hash % bucketCapacity;
-        uint?* bucket = &Bucket[bucket_index];
+        uint* bucket = &Bucket[bucket_index];
 
-        while (*bucket != null)
+        while (*bucket != uint.MaxValue)
         {
-            Slot<T>* linkedSlot = &Slot[bucket->Value];
+            Slot<T>* linkedSlot = &Slot[*bucket];
 
             if (linkedSlot == slot)
             {    
@@ -108,14 +104,14 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         int hash = value.GetHashCode();
         uint bucket_index = (uint)hash % bucketCapacity;
 
-        uint?* index = &Bucket[bucket_index];
+        uint* index = &Bucket[bucket_index];
 
         while(true)
         {
-            if (*index == null)
+            if (*index == uint.MaxValue)
                 return false;
 
-            Slot<T>* slot = &Slot[index->Value];
+            Slot<T>* slot = &Slot[*index];
 
             if (slot->Value.Equals(value))
                 return true;
@@ -131,11 +127,10 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         uint newBucketCapacity = Math.Max(1u, newCapacity / division);
         Capacity = newCapacity;
 
-        Slot<T>* newSlot = (Slot<T>*)NativeMemory.Alloc((nuint)(sizeof(Slot<T>) * newCapacity));
-        uint?* newBucket = (uint?*)NativeMemory.Alloc(sizeof(uint) * newBucketCapacity);
+        Slot<T>* newSlot = null;
+        uint* newBucket = null;
 
-        NativeMemory.Clear(newSlot, (nuint)sizeof(Slot<T>) * newCapacity);
-        NativeMemory.Clear(newBucket, (nuint)sizeof(uint?) * newBucketCapacity);
+        Init(ref newSlot, newCapacity, ref newBucket, newBucketCapacity);
 
         Buffer.MemoryCopy(
             Slot, newSlot,
@@ -150,7 +145,7 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
             Slot<T>* slot = &newSlot[i];
 
             uint bucket_index = (uint)slot->Hash % newBucketCapacity;
-            uint?* bucket = &newBucket[bucket_index];
+            uint* bucket = &newBucket[bucket_index];
 
             slot->Next = *bucket;
 
@@ -160,6 +155,15 @@ public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
         Slot = newSlot;
         Bucket = newBucket;
         bucketCapacity = newBucketCapacity;
+    }
+
+    private void Init(ref Slot<T>* slot, uint capacity, ref uint* bucket, uint bucketCapacity)
+    {
+        slot = (Slot<T>*)NativeMemory.Alloc((nuint)(sizeof(Slot<T>) * capacity));
+        bucket = (uint*)NativeMemory.Alloc(sizeof(uint) * bucketCapacity);
+
+        NativeMemory.Clear(slot, (nuint)sizeof(Slot<T>) * capacity);
+        NativeMemory.Fill(bucket, sizeof(uint) * bucketCapacity, 0xFF);
     }
 
     public void Dispose()
