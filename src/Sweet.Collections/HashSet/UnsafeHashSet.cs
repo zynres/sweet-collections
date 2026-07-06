@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace unsafe_maps.src.hash_set;
+namespace Sweet.Collections.HashSet;
 
 public unsafe struct UnsafeHashSet<T> : IDisposable where T : unmanaged
 {

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
+using Sweet.Collections.List;
 
-namespace unsafe_maps.src;
+namespace Sweet.Collections.Array;
 
 public unsafe struct UnsafeArray<T> : IDisposable where T : unmanaged
 {

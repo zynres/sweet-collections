@@ -1,4 +1,4 @@
-namespace unsafe_maps.src.hash_set;
+namespace Sweet.Collections.HashSet;
 
 public struct Slot<T>
 {

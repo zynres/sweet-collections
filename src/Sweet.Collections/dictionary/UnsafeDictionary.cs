@@ -1,4 +1,4 @@
-namespace unsafe_maps.src.dictionary;
+namespace Sweet.Collections.Dictionary;
 
 public unsafe struct UnsafeDictionary<TKey, TValue> 
     where TKey : unmanaged 
