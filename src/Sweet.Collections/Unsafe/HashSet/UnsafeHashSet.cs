@@ -1,3 +1,5 @@
+// Copyright © 2026 Zynres.
+
 using System.Runtime.InteropServices;
 
 namespace Sweet.Collections.Unsafe.HashSet;

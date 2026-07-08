@@ -1,3 +1,5 @@
+// Copyright © 2026 Zynres.
+
 using System.Runtime.InteropServices;
 using Sweet.Collections.Unsafe.Array;
 
