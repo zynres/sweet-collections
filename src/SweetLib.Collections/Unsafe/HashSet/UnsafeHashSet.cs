@@ -6,23 +6,18 @@ namespace SweetLib.Collections.Unsafe.HashSet;
 
 public unsafe struct UnsafeHashSet<T> where T : unmanaged
 {
-    public uint* Bucket;
-    public Slot<T>* Slot;
-
-    private uint bucketCapacity;
-    private readonly byte division;
+    internal Bucket Bucket;
+    public Slot<T>* Slots;
 
     public uint Length;
     public uint Capacity;
 
     public UnsafeHashSet(uint capacity, byte division = 2)
     {
-        this.division = division;
-
+        Bucket = new Bucket(Math.Max(1u, capacity / division), division);
         Capacity = capacity;
-        bucketCapacity = Math.Max(1u, capacity / division);
 
-        Init(ref Slot, capacity, ref Bucket, bucketCapacity);
+        Init(ref Slots, capacity, ref Bucket);
     }
 
     public void Add(in T value)
@@ -30,14 +25,21 @@ public unsafe struct UnsafeHashSet<T> where T : unmanaged
         if (Length >= Capacity)
             Resize(Math.Max(Capacity * 2, Length + 1));
 
-        if (Constaint(in value))
-            return;
-
         int hash = value.GetHashCode();
-        uint bucket_index = (uint)hash % bucketCapacity;
-        uint* bucket = &Bucket[bucket_index];
+        uint bucket_index = (uint)hash % Bucket.Capacity;
+        uint* bucket = &Bucket.Data[bucket_index];
 
-        Slot<T>* slot = &Slot[Length];
+        while (*bucket != uint.MaxValue)
+        {
+            Slot<T>* linkedSlot = &Slots[*bucket];
+
+            if (linkedSlot->Hash == hash && linkedSlot->Value.Equals(value))
+                return;
+
+            bucket = &linkedSlot->Next;
+        }
+
+        Slot<T>* slot = &Slots[Length];
 
         slot->Value = value;
         slot->Hash = hash;
@@ -52,14 +54,19 @@ public unsafe struct UnsafeHashSet<T> where T : unmanaged
         if (index >= Length)
             throw new IndexOutOfRangeException();
 
-        Slot<T>* slot = &Slot[index];
+        // if you don't check for the existence of the value, it will lead to data duplication, 
+        // which makes no sense for this map.
+        if (Contains(in value))
+            return;
 
-        uint bucket_index = (uint)slot->Hash % bucketCapacity;
-        uint* bucket = &Bucket[bucket_index];
+        Slot<T>* slot = &Slots[index];
+
+        uint bucket_index = (uint)slot->Hash % Bucket.Capacity;
+        uint* bucket = &Bucket.Data[bucket_index];
 
         while (*bucket != uint.MaxValue)
         {
-            Slot<T>* linkedSlot = &Slot[*bucket];
+            Slot<T>* linkedSlot = &Slots[*bucket];
 
             if (linkedSlot == slot)
             {
@@ -74,8 +81,8 @@ public unsafe struct UnsafeHashSet<T> where T : unmanaged
         }
 
         int hash = value.GetHashCode();
-        bucket_index = (uint)hash % bucketCapacity;
-        bucket = &Bucket[bucket_index];
+        bucket_index = (uint)hash % Bucket.Capacity;
+        bucket = &Bucket.Data[bucket_index];
 
         slot->Next = *bucket;
         slot->Value = value;
@@ -99,67 +106,64 @@ public unsafe struct UnsafeHashSet<T> where T : unmanaged
     public readonly bool Contains(in T value)
     {
         int hash = value.GetHashCode();
-        uint bucket_index = (uint)hash % bucketCapacity;
-
-        uint* index = &Bucket[bucket_index];
+        uint bucket_index = (uint)hash % Bucket.Capacity;
+        uint index = Bucket.Data[bucket_index];
 
         while (true)
         {
-            if (*index == uint.MaxValue)
+            if (index == uint.MaxValue)
                 return false;
 
-            Slot<T>* slot = &Slot[*index];
+            Slot<T>* slot = &Slots[index];
 
-            if (slot->Value.Equals(value))
+            if (slot->Hash == hash && slot->Value.Equals(value))
                 return true;
 
-            index = &slot->Next;
+            index = slot->Next;
         }
     }
 
     private void Resize(uint newCapacity)
     {
-        uint newBucketCapacity = Math.Max(1u, newCapacity / division);
         Capacity = newCapacity;
 
+        Bucket newBucket = new(Math.Max(1u, newCapacity / Bucket.Division), Bucket.Division);
         Slot<T>* newSlot = null;
-        uint* newBucket = null;
 
-        Init(ref newSlot, newCapacity, ref newBucket, newBucketCapacity);
+        Init(ref newSlot, newCapacity, ref newBucket);
 
-        if (Slot != null)
+        if (Slots != null)
         {
             Buffer.MemoryCopy(
-                Slot, newSlot,
+                Slots, newSlot,
                 newCapacity * sizeof(Slot<T>),
                 Length * sizeof(Slot<T>));
         }
 
-        NativeMemory.Free(Bucket);
-        NativeMemory.Free(Slot);
+        NativeMemory.Free(Bucket.Data);
+        NativeMemory.Free(Slots);
 
         // remapping values in the bucket because its size was changed
         for (uint i = 0; i < Length; i++)
         {
             Slot<T>* slot = &newSlot[i];
 
-            uint bucket_index = (uint)slot->Hash % newBucketCapacity;
-            uint* bucket = &newBucket[bucket_index];
+            uint bucket_index = (uint)slot->Hash % newBucket.Capacity;
+            uint* bucket = &newBucket.Data[bucket_index];
 
             slot->Next = *bucket;
 
             *bucket = i;
         }
 
-        Slot = newSlot;
         Bucket = newBucket;
-        bucketCapacity = newBucketCapacity;
+        Slots = newSlot;
     }
 
-    private static void Init(ref Slot<T>* slot, uint capacity, ref uint* bucket, uint bucketCapacity)
+    private static void Init(ref Slot<T>* slot, uint capacity, ref Bucket bucket)
     {
         slot = (Slot<T>*)NativeMemory.Alloc((nuint)(sizeof(Slot<T>) * capacity));
-        bucket = (uint*)NativeMemory.Alloc(sizeof(uint) * bucketCapacity);
+        bucket.Data = (uint*)NativeMemory.Alloc(sizeof(uint) * bucket.Capacity);
 
         // Fill the bucket values to maximum values, 
         // because the check for emptiness is performed using uint.MaxValue.
